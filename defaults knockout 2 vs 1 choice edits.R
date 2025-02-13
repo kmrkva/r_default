@@ -236,8 +236,7 @@ head(d12[c(choice_cols, paste0("choose_nothing_", choice_names))])
 
 
 # Move values from FL_285_DO to FL_348_DO to the corresponding new columns
-fl_cols <- c("FL_285_DO", "FL_290_DO", "FL_133_DO", "FL_297_DO", "FL_316_DO", "FL_230_DO", "FL_325_DO", "FL_233_DO", "FL_331_DO", "FL_236_DO", 
-             "FL_337_DO", "FL_239_DO", "FL_342_DO", "FL_240_DO", "FL_348_DO")
+fl_cols <- c("FL_285_DO", "FL_290_DO", "FL_297_DO", "FL_316_DO", "FL_325_DO", "FL_331_DO", "FL_337_DO", "FL_342_DO", "FL_348_DO")
 
 # Identify the starting column for the new columns
 start_col <- which(names(d12) == "Adobe.1choice.bothconditions.def.nodef._DO")
@@ -247,3 +246,31 @@ for (i in 1:length(fl_cols)) {
   new_col_index <- start_col + (i - 1)
   d12[, new_col_index] <- ifelse(!is.na(d12[[fl_cols[i]]]) & d12[[fl_cols[i]]] != "", d12[[fl_cols[i]]], d12[, new_col_index])
 }
+
+
+
+
+##trying to make long form
+
+# Define the choice domains and corresponding columns
+choice_domains <- c("Adobe", "Max", "WSJ", "BoxyCharm", "Amazon", "Walmart", "GoPro", "Retail", "Debt")
+choice2_cols <- paste0(tolower(choice_domains), "_choice2")
+choice1_cols <- paste0(tolower(choice_domains), "_choice1")
+default_cols <- c("Adobe.1choice.bothconditions.def.nodef._DO", "Max.1choice.bothconditions.def.nodef._DO", 
+                  "WSJ.1choice_DO", "BoxyCharm.1choice.._DO", "Amazon.1choice_DO", 
+                  "Walmart.1choice_DO", "GoPro.1choice_DO", "retirementamount.1choice_DO", 
+                  "ccdebtrepay.1choice_DO")
+
+# Create a list of data frames, each containing the 9 rows for a single ResponseId
+long_list <- lapply(1:nrow(d12), function(i) {
+  data.frame(
+    ResponseId = d12$ResponseId[i],
+    choice_domain = choice_domains,
+    choice2_val = as.character(d12[i, choice2_cols]),
+    choice1_val = as.character(d12[i, choice1_cols]),
+    default_val = as.character(d12[i, default_cols])
+  )
+})
+
+# Combine the list of data frames into a single data frame
+d12_long <- do.call(rbind, long_list)
