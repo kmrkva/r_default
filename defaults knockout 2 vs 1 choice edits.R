@@ -1,4 +1,9 @@
+library(lme4)
+library(lmerTest)
+
+
 d12initial<-read.csv("/Users/Kellen_Mrkva/Documents/defaults 1 vs 2 choice n220.csv")
+
 
 # Step 1: Remove the 2nd and 3rd rows from d12
 d12_clean <- d12initial[-c(1:3), ]  # Remove rows 2 and 3
@@ -106,13 +111,14 @@ print_value_tables(d12, debt_cols, "Debt")
 
 #swap order of 2 columns (only 1 where the no default condition was first in the df)
 
-# Swap Q274 and Q275
-d12[, c("Q274", "Q275")] <- d12[, c("Q275", "Q274")]
 
-# Ensure Q275 appears first in wal_cols
-if ("Q274" %in% wal_cols & "Q275" %in% wal_cols) {
-  wal_cols <- c("Q275", "Q274", setdiff(wal_cols, c("Q274", "Q275")))
-}
+# Swap Q274 and Q275 in the dataframe while keeping their column positions
+d12$Q275_temp<-d12$Q275
+d12$Q274_temp<-d12$Q274
+
+d12$Q275<-d12$Q274_temp
+d12$Q274<-d12$Q275_temp
+
 
 
 # Function to extract default value from the first column of each choice domain
@@ -127,7 +133,7 @@ extract_default_val <- function(df, first_col) {
 }
 
 # Create a data frame with choice labels, default values, and columns used
-choice_labels <- c("Adobe", "Max", "WSJ", "Boxy", "Amazon", "Walmart", "GoPro", "Retail", "Debt")
+choice_labels <- c("adobe", "max", "wsj", "boxy", "amzn", "wal", "gopro", "ret", "debt")
 choice_columns <- list(adobe_cols, max_cols, wsj_cols, boxy_cols, amzn_cols, wal_cols, gopro_cols, ret_cols, debt_cols)
 
 # Extract default values for each choice domain
@@ -253,24 +259,71 @@ for (i in 1:length(fl_cols)) {
 ##trying to make long form
 
 # Define the choice domains and corresponding columns
-choice_domains <- c("Adobe", "Max", "WSJ", "BoxyCharm", "Amazon", "Walmart", "GoPro", "Retail", "Debt")
+choice_domains <- c("adobe", "max", "wsj", "boxy", "amzn", "wal", "gopro", "ret", "debt")
 choice2_cols <- paste0(tolower(choice_domains), "_choice2")
 choice1_cols <- paste0(tolower(choice_domains), "_choice1")
-default_cols <- c("Adobe.1choice.bothconditions.def.nodef._DO", "Max.1choice.bothconditions.def.nodef._DO", 
+default_cols <- c("Adobe.1choice.bothconditions.def.nodef._DO", "Max.1choice._DO", 
                   "WSJ.1choice_DO", "BoxyCharm.1choice.._DO", "Amazon.1choice_DO", 
                   "Walmart.1choice_DO", "GoPro.1choice_DO", "retirementamount.1choice_DO", 
                   "ccdebtrepay.1choice_DO")
+choose_nothing_cols <- paste0("choose_nothing_", tolower(choice_domains))
+
+# Check if all specified columns are present in the dataframe
+# Check if all specified columns are present in the dataframe
+all_cols <- c(choice2_cols, choice1_cols, default_cols)
+missing_cols <- setdiff(all_cols, names(d12))
+if (length(missing_cols) > 0) {
+  stop("The following columns are missing in the dataframe: ", paste(missing_cols, collapse = ", "))
+}
 
 # Create a list of data frames, each containing the 9 rows for a single ResponseId
 long_list <- lapply(1:nrow(d12), function(i) {
-  data.frame(
-    ResponseId = d12$ResponseId[i],
+  base_row <- d12[i, ]
+  long_df <- data.frame(
+    ResponseId = base_row$ResponseId,
     choice_domain = choice_domains,
-    choice2_val = as.character(d12[i, choice2_cols]),
-    choice1_val = as.character(d12[i, choice1_cols]),
-    default_val = as.character(d12[i, default_cols])
+    choice2_val = as.character(unlist(base_row[choice2_cols])),
+    choice1_val = as.character(unlist(base_row[choice1_cols])),
+    default_val = as.character(unlist(base_row[default_cols])),
+    choose_nothing = as.numeric(unlist(base_row[choose_nothing_cols]))
   )
+  # Replicate other columns for each choice domain
+  other_cols <- base_row[ , !(names(base_row) %in% c("ResponseId", choice2_cols, choice1_cols, default_cols, choose_nothing_cols))]
+  long_df <- cbind(long_df, other_cols[rep(1, 9), ])
+  return(long_df)
 })
 
 # Combine the list of data frames into a single data frame
 d12_long <- do.call(rbind, long_list)
+
+
+# Create the defaultdummy variable
+d12_long$defaultdummy <- ifelse(grepl("Q274|Q269|Q290|Q353|def_|default_r|withdefault", d12_long$default_val), 1,
+                                ifelse(grepl("nd_|nodefault|Q275|Q291|Q366", d12_long$default_val), 0, NA))
+
+##coding whether the potential default was chosen.
+cleaned_default_vals <- gsub("^def ", "", default_vals)
+
+#Create default_chosen in d12_long
+d12_long$default_chosen <- ifelse(
+  is.na(d12_long$choice2_val) | d12_long$choice2_val == "", 
+  d12_long$choice2_val,  # Keep NA or empty values as is
+  ifelse(d12_long$choice2_val %in% cleaned_default_vals, 1, 0)
+)
+
+# Print first few rows to verify
+head(d12_long[, c("choice2_val", "default_chosen")])
+
+
+d12_long$default_chosen<-as.numeric(d12_long$default_chosen)
+
+#coding whether they chose anything
+#d12_long$choose_nothing<-NA
+#d12_long$choose_nothing[d12_long$choice1_val=="None of the above"]<-1
+#d12_long$choose_nothing[d12_long$choice1_val=="Choose something"]<-0
+
+
+m1<-lmer(default_chosen~defaultdummy+(1|ResponseId),data=d12_long)
+summary(m1)
+
+
