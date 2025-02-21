@@ -1,3 +1,4 @@
+```rez
 library(lme4)
 library(lmerTest)
 
@@ -241,14 +242,24 @@ long_list <- lapply(1:nrow(d12), function(i) {
     choice_domain = choice_domains,
     choice2_val = as.character(unlist(base_row[choice2_cols])),
     choice1_val = as.character(unlist(base_row[choice1_cols])),
-    default_val = ifelse(base_row$single == 1, 
-                         as.character(unlist(base_row[default_cols])), 
-                         as.character(unlist(base_row[fl_cols]))),
+    default_val = NA,  # Initialize with NA
     choose_nothing = as.numeric(unlist(base_row[choose_nothing_cols]))
   )
   # Replicate other columns for each choice domain
   other_cols <- base_row[ , !(names(base_row) %in% c("ResponseId", choice2_cols, choice1_cols, default_cols, choose_nothing_cols, fl_cols))]
   long_df <- cbind(long_df, other_cols[rep(1, 9), ])
+  
+  # Assign the correct default_val based on the row position within each ResponseId group
+  if (!is.na(base_row$single)) {
+    if (base_row$single == 1) {
+      long_df$default_val <- as.character(unlist(base_row[default_cols]))[1:9]
+    } else {
+      long_df$default_val <- as.character(unlist(base_row[fl_cols]))[1:9]
+    }
+  } else {
+    long_df$default_val <- NA  # Handle NA case
+  }
+  
   return(long_df)
 })
 
@@ -281,3 +292,5 @@ d12_long$default_chosen <- as.numeric(d12_long$default_chosen)
 
 m1 <- lmer(default_chosen ~ defaultdummy + (1 | ResponseId), data = d12_long)
 summary(m1)
+
+```

@@ -281,3 +281,4 @@ d12_long$default_chosen <- as.numeric(d12_long$default_chosen)
 
 m1 <- lmer(default_chosen ~ defaultdummy + (1 | ResponseId), data = d12_long)
 summary(m1)
+
